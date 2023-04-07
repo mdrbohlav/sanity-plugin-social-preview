@@ -70,12 +70,6 @@ async function asyncCall(this: unknown, item: unknown, ...args: unknown[]): Prom
   return await (typeof item === 'function' ? item.apply(this, args) : item)
 }
 
-const NetworkSpinner = (network: Network) => (
-  <Flex key={network} justify="center" align="center" height="fill">
-    <Spinner muted size={2} />
-  </Flex>
-)
-
 const SocialPreview = ({
   prepareData = fallbackPrepareData,
   google,
@@ -84,6 +78,7 @@ const SocialPreview = ({
   facebook,
 }: SocialPreviewProps = {}) => {
   return function SocialPreviewComponent({ document }: DocumentView) {
+    const [loading, setLoading] = useState<boolean | undefined>(undefined)
     const [chosenNetwork, setChosenNetwork] = useState<Network>('google')
     const [networkProps, setNetworkProps] = useState<Record<PropertyKey, BasePreviewProps>>({})
 
@@ -100,44 +95,52 @@ const SocialPreview = ({
     }
     const networkKeys = Object.keys(NETWORKS) as Network[]
 
-    const loadProps = () => {
-      console.log('load props')
-
-      Promise.all([
-        asyncCall(prepareData, document?.displayed) as Promise<BasePreviewProps>,
-        asyncCall(google, document?.displayed) as Promise<BasePreviewProps>,
-        asyncCall(twitter, document?.displayed) as Promise<BasePreviewProps>,
-        asyncCall(linkedin, document?.displayed) as Promise<BasePreviewProps>,
-        asyncCall(facebook, document?.displayed) as Promise<BasePreviewProps>,
-      ]).then(([data, googleData, twitterData, linkedinData, facebookData]) => {
-        console.log([data, googleData, twitterData, linkedinData, facebookData])
-
-        const newNetworkProps = { ...networkProps }
-
-        if (!availableNetworks.google) {
-          newNetworkProps.google = googleData || data
-        }
-
-        if (!availableNetworks.twitter) {
-          newNetworkProps.twitter = twitterData || data
-        }
-
-        if (!availableNetworks.linkedin) {
-          newNetworkProps.linkedin = linkedinData || data
-        }
-
-        if (!availableNetworks.facebook) {
-          newNetworkProps.facebook = facebookData || data
-        }
-
-        setNetworkProps(newNetworkProps)
-      })
-    }
-
     useEffect(() => {
-      console.log('use effect')
-      loadProps()
-    })
+      const loadProps = () => {
+        setLoading(true)
+
+        Promise.all([
+          asyncCall(prepareData, document?.displayed) as Promise<BasePreviewProps>,
+          asyncCall(google, document?.displayed) as Promise<BasePreviewProps>,
+          asyncCall(twitter, document?.displayed) as Promise<BasePreviewProps>,
+          asyncCall(linkedin, document?.displayed) as Promise<BasePreviewProps>,
+          asyncCall(facebook, document?.displayed) as Promise<BasePreviewProps>,
+        ]).then(([data, googleData, twitterData, linkedinData, facebookData]) => {
+          const newNetworkProps = { ...networkProps }
+
+          if (availableNetworks.google) {
+            newNetworkProps.google = googleData || data
+          }
+
+          if (availableNetworks.twitter) {
+            newNetworkProps.twitter = twitterData || data
+          }
+
+          if (availableNetworks.linkedin) {
+            newNetworkProps.linkedin = linkedinData || data
+          }
+
+          if (availableNetworks.facebook) {
+            newNetworkProps.facebook = facebookData || data
+          }
+
+          setNetworkProps(newNetworkProps)
+          setLoading(false)
+        })
+      }
+
+      if (loading === undefined) {
+        loadProps()
+      }
+    }, [loading, setLoading])
+
+    if (loading !== false) {
+      return (
+        <Flex justify="center" align="center" height="fill">
+          <Spinner muted size={2} />
+        </Flex>
+      )
+    }
 
     return (
       <Wrapper>
@@ -160,8 +163,6 @@ const SocialPreview = ({
         </div>
         {networkKeys.map((network) => {
           if (!availableNetworks[network] || network !== chosenNetwork) return null
-
-          if (!(network in networkProps)) return NetworkSpinner(network)
 
           const { component: Component } = NETWORKS[network]
           return <Component key={network} {...networkProps[network]} />
